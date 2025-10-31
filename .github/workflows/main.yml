@@ -55,14 +55,22 @@ jobs:
           golang-go npm nodejs unzip wget curl jq nmap whois \
           subversion git-svn dnsutils nikto
         
-    # === SECTION NUCLEI ===
-    - name: Setup Nuclei
-      uses: projectdiscovery/setup-nuclei-action@v1
-      with:
-        nuclei-version: latest
+    # === SECTION NUCLEI - INSTALLATION MANUELLE ===
+    - name: Install Nuclei manually
+      run: |
+        echo "🔧 Installing Nuclei manually..."
+        # Téléchargement et installation de Nuclei
+        go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
+        
+        # Ajout au PATH
+        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
         
     - name: Update Nuclei templates
-      run: nuclei -update-templates
+      run: |
+        # Attendre que le PATH soit mis à jour
+        sleep 5
+        echo "📦 Updating Nuclei templates..."
+        nuclei -update-templates
         
     # === SECTION WPScan ===  
     - name: Install WPScan
@@ -138,6 +146,15 @@ jobs:
         # Amass
         go install -v github.com/OWASP/Amass/v3/...@master
         
+    # === VERIFICATION DES OUTILS ===
+    - name: Verify tools installation
+      run: |
+        echo "🔍 Verifying installed tools..."
+        nuclei -version && echo "✅ Nuclei installed"
+        wpscan --version && echo "✅ WPScan installed"
+        python3 --version && echo "✅ Python installed"
+        go version && echo "✅ Go installed"
+        
     # === LANCEMENT DES SCANS ===
     
     - name: Run Ultimate Nuclei Scan
@@ -180,7 +197,7 @@ jobs:
         --themes-detection aggressive \
         --themes-version-detection aggressive \
         --max-threads 30 \
-        --throttle 5 \
+        -t 5 \
         --request-timeout 45 \
         --detection-mode aggressive \
         --random-user-agent \
@@ -227,11 +244,6 @@ jobs:
       run: |
         echo "👀 Starting wplookup on: ${{ github.event.inputs.target_url }}"
         wplookup "${{ github.event.inputs.target_url }}" > wplookup-results.txt 2>&1 || true
-        
-    - name: Run WordPress Pentesting Framework
-      run: |
-        echo "🛠️ Starting WPF on: ${{ github.event.inputs.target_url }}"
-        cd wordpress-pentesting-framework && echo "exit" | bundle exec ruby wpf-console.rb || true
         
     - name: Run wpsqli scan
       run: |
@@ -281,7 +293,6 @@ jobs:
         echo "- 👆 **wpfinger** - Fingerprinting WordPress" >> ULTIMATE-REPORT.md
         echo "- 🎭 **wpcontext** - Analyse de contexte" >> ULTIMATE-REPORT.md
         echo "- 👀 **wplookup** - Recherche d'infos" >> ULTIMATE-REPORT.md
-        echo "- 🛠️ **WPF** - Framework de pentest" >> ULTIMATE-REPORT.md
         echo "- 💉 **wpsqli** - Tests SQLi" >> ULTIMATE-REPORT.md
         echo "- 🌐 **Subdomain Tools** - Discovery" >> ULTIMATE-REPORT.md
         echo "- 🚨 **Nikto** - Scanner web" >> ULTIMATE-REPORT.md
