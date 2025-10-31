@@ -83,64 +83,58 @@ jobs:
         git clone https://github.com/Dionach/CMSmap.git
         cd CMSmap && pip3 install . --user
         
-    # === SECTION WPSeku ===
-    - name: Install WPSeku
-      run: |
-        git clone https://github.com/m4ll0k/WPSeku.git wpseku
-        cd wpseku && pip3 install -r requirements.txt --user
-        
     # === SECTION WPSCAN PLUS ===
     - name: Install wpscan-plus
       run: |
-        git clone https://github.com/0x4544474154/wpscan-plus.git
+        git clone https://github.com/0x4544474154/wpscan-plus.git || echo "wpscan-plus clone failed, continuing..."
         
     # === SECTION WORDPRESS-SCAN ===
     - name: Install wordpress-scan
       run: |
-        git clone https://github.com/wpscanteam/wordpress-scan.git
+        git clone https://github.com/wpscanteam/wordpress-scan.git || echo "wordpress-scan clone failed, continuing..."
         cd wordpress-scan
         gem install --user-install bundler
         export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
-        bundle install --path vendor/bundle
+        bundle install --path vendor/bundle || echo "wordpress-scan installation failed"
         
     # === SECTION WPFINGER ===
     - name: Install wpfinger
       run: |
-        git clone https://github.com/mazen160/wpfinger.git
-        cd wpfinger && pip3 install -r requirements.txt --user
+        git clone https://github.com/mazen160/wpfinger.git || echo "wpfinger clone failed, continuing..."
+        cd wpfinger && pip3 install -r requirements.txt --user || echo "wpfinger installation failed"
         
     # === SECTION WPCONTEXT ===
     - name: Install wpcontext
       run: |
-        pip3 install wpcontext --user
+        pip3 install wpcontext --user || echo "wpcontext installation failed"
         
     # === SECTION WPLOOKUP ===
     - name: Install wplookup
       run: |
-        npm install -g wplookup
+        npm install -g wplookup || echo "wplookup installation failed"
         
     # === SECTION WORDPRESS-PENTESTING-FRAMEWORK ===
     - name: Install WPF
       run: |
-        git clone https://github.com/rastating/wordpress-pentesting-framework.git
+        git clone https://github.com/rastating/wordpress-pentesting-framework.git || echo "WPF clone failed, continuing..."
         cd wordpress-pentesting-framework
         gem install --user-install bundler
         export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
-        bundle install --path vendor/bundle
+        bundle install --path vendor/bundle || echo "WPF installation failed"
         
     # === SECTION WPSQLI ===
     - name: Install wpsqli
       run: |
-        git clone https://github.com/0x4544474154/wpsqli.git
+        git clone https://github.com/0x4544474154/wpsqli.git || echo "wpsqli clone failed, continuing..."
         
     # === SECTION WPXF ===
     - name: Install wpxf
       run: |
-        git clone https://github.com/rastating/wpxf.git
+        git clone https://github.com/rastating/wpxf.git || echo "wpxf clone failed, continuing..."
         cd wpxf
         gem install --user-install bundler
         export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
-        bundle install --path vendor/bundle
+        bundle install --path vendor/bundle || echo "wpxf installation failed"
         
     # === SECTION SUBDOMAIN RECON ===
     - name: Install subdomain tools
@@ -227,40 +221,51 @@ jobs:
         cd CMSmap && python3 cmsmap.py -t "${{ github.event.inputs.target_url }}" -f W --no-output --quiet
         cp output/*.txt ../cmsmap-results.txt 2>/dev/null || echo "No CMSmap output"
         
-    - name: Run WPSeku Scan
-      run: |
-        echo "⚡ Starting WPSeku on: ${{ github.event.inputs.target_url }}"
-        cd wpseku && python3 wpseku.py -u "${{ github.event.inputs.target_url }}" --verbose > ../wpseku-results.txt 2>&1 || true
-        
     - name: Run wpscan-plus
       run: |
         echo "➕ Starting wpscan-plus on: ${{ github.event.inputs.target_url }}"
-        cd wpscan-plus && ruby wpscan-plus.rb -u "${{ github.event.inputs.target_url }}" > ../wpscan-plus-results.txt 2>&1 || true
+        if [ -d "wpscan-plus" ]; then
+          cd wpscan-plus && ruby wpscan-plus.rb -u "${{ github.event.inputs.target_url }}" > ../wpscan-plus-results.txt 2>&1 || true
+        else
+          echo "wpscan-plus not available" > wpscan-plus-results.txt
+        fi
         
     - name: Run wordpress-scan
       run: |
         echo "🔍 Starting wordpress-scan on: ${{ github.event.inputs.target_url }}"
-        cd wordpress-scan && bundle exec ruby wordpress-scan.rb --url "${{ github.event.inputs.target_url }}" --no-color > ../wordpress-scan-results.txt 2>&1 || true
+        if [ -d "wordpress-scan" ]; then
+          cd wordpress-scan && bundle exec ruby wordpress-scan.rb --url "${{ github.event.inputs.target_url }}" --no-color > ../wordpress-scan-results.txt 2>&1 || true
+        else
+          echo "wordpress-scan not available" > wordpress-scan-results.txt
+        fi
         
     - name: Run wpfinger
       run: |
         echo "👆 Starting wpfinger on: ${{ github.event.inputs.target_url }}"
-        cd wpfinger && python3 wpfinger.py -t "${{ github.event.inputs.target_url }}" > ../wpfinger-results.txt 2>&1 || true
+        if [ -d "wpfinger" ]; then
+          cd wpfinger && python3 wpfinger.py -t "${{ github.event.inputs.target_url }}" > ../wpfinger-results.txt 2>&1 || true
+        else
+          echo "wpfinger not available" > wpfinger-results.txt
+        fi
         
     - name: Run wpcontext
       run: |
         echo "🎭 Starting wpcontext on: ${{ github.event.inputs.target_url }}"
-        wpcontext --url "${{ github.event.inputs.target_url }}" --output wpcontext-results.txt || true
+        wpcontext --url "${{ github.event.inputs.target_url }}" --output wpcontext-results.txt || echo "wpcontext failed" > wpcontext-results.txt
         
     - name: Run wplookup
       run: |
         echo "👀 Starting wplookup on: ${{ github.event.inputs.target_url }}"
-        wplookup "${{ github.event.inputs.target_url }}" > wplookup-results.txt 2>&1 || true
+        wplookup "${{ github.event.inputs.target_url }}" > wplookup-results.txt 2>&1 || echo "wplookup failed" > wplookup-results.txt
         
     - name: Run wpsqli scan
       run: |
         echo "💉 Testing wpsqli on: ${{ github.event.inputs.target_url }}"
-        cd wpsqli && python3 wpsqli.py -u "${{ github.event.inputs.target_url }}" --check > ../wpsqli-results.txt 2>&1 || true
+        if [ -d "wpsqli" ]; then
+          cd wpsqli && python3 wpsqli.py -u "${{ github.event.inputs.target_url }}" --check > ../wpsqli-results.txt 2>&1 || true
+        else
+          echo "wpsqli not available" > wpsqli-results.txt
+        fi
         
     - name: Run Subdomain Discovery
       run: |
@@ -299,7 +304,6 @@ jobs:
         echo "- 🔍 **Nuclei** - Scanning de vulnérabilités" >> ULTIMATE-REPORT.md
         echo "- 🛡️ **WPScan** - Scanner WordPress principal" >> ULTIMATE-REPORT.md
         echo "- 🗺️ **CMSmap** - Mapping CMS" >> ULTIMATE-REPORT.md
-        echo "- ⚡ **WPSeku** - Sécurité WordPress" >> ULTIMATE-REPORT.md
         echo "- ➕ **wpscan-plus** - WPScan amélioré" >> ULTIMATE-REPORT.md
         echo "- 🔍 **wordpress-scan** - Scanner alternatif" >> ULTIMATE-REPORT.md
         echo "- 👆 **wpfinger** - Fingerprinting WordPress" >> ULTIMATE-REPORT.md
