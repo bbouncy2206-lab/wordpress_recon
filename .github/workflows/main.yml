@@ -53,7 +53,7 @@ jobs:
         sudo apt install -y ruby ruby-dev build-essential \
           libcurl4-openssl-dev git python3 python3-pip python3-venv \
           golang-go npm nodejs unzip wget curl jq nmap whois \
-          subversion git-svn dnsutils nikto
+          dnsutils nikto libxml2-dev libxslt-dev
         
     # === SECTION NUCLEI - INSTALLATION MANUELLE ===
     - name: Install Nuclei manually
@@ -62,14 +62,10 @@ jobs:
         # Téléchargement et installation de Nuclei
         go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
         
-        # Ajout au PATH
-        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-        
     - name: Update Nuclei templates
       run: |
-        # Attendre que le PATH soit mis à jour
-        sleep 5
         echo "📦 Updating Nuclei templates..."
+        export PATH=$PATH:$(go env GOPATH)/bin
         nuclei -update-templates
         
     # === SECTION WPScan ===  
@@ -143,13 +139,11 @@ jobs:
         # Assetfinder
         go install github.com/tomnomnom/assetfinder@latest
         
-        # Amass
-        go install -v github.com/OWASP/Amass/v3/...@master
-        
     # === VERIFICATION DES OUTILS ===
     - name: Verify tools installation
       run: |
         echo "🔍 Verifying installed tools..."
+        export PATH=$PATH:$(go env GOPATH)/bin
         nuclei -version && echo "✅ Nuclei installed"
         wpscan --version && echo "✅ WPScan installed"
         python3 --version && echo "✅ Python installed"
@@ -160,6 +154,7 @@ jobs:
     - name: Run Ultimate Nuclei Scan
       run: |
         echo "🎯 Starting ULTIMATE Nuclei Scan on: ${{ github.event.inputs.target_url }}"
+        export PATH=$PATH:$(go env GOPATH)/bin
         nuclei -u "${{ github.event.inputs.target_url }}" \
         -t http/technologies/wordpress/ \
         -t http/vulnerabilities/wordpress/ \
@@ -176,10 +171,10 @@ jobs:
         -t http/exposures/logs/ \
         -t http/exposed-panels/ \
         -severity low,medium,high,critical \
-        -rate-limit 200 \
-        -concurrency 70 \
-        -timeout 15 \
-        -retries 5 \
+        -rate-limit 100 \
+        -concurrency 30 \
+        -timeout 10 \
+        -retries 3 \
         -headless \
         -system-resolvers \
         -silent \
@@ -190,16 +185,15 @@ jobs:
       run: |
         echo "🔥 Starting NUCLEAR WPScan on: ${{ github.event.inputs.target_url }}"
         wpscan --url "${{ github.event.inputs.target_url }}" \
-        --enumerate vp,vt,tt,cb,dbe,u,m,p,t \
-        --enumerate u0-100 \
-        --plugins-detection aggressive \
-        --plugins-version-detection aggressive \
-        --themes-detection aggressive \
-        --themes-version-detection aggressive \
-        --max-threads 30 \
+        --enumerate vp,vt,tt,cb,dbe,u,m \
+        --plugins-detection mixed \
+        --plugins-version-detection mixed \
+        --themes-detection mixed \
+        --themes-version-detection mixed \
+        --max-threads 10 \
         -t 5 \
-        --request-timeout 45 \
-        --detection-mode aggressive \
+        --request-timeout 30 \
+        --detection-mode mixed \
         --random-user-agent \
         --ignore-main-redirect \
         --disable-tls-checks \
@@ -256,11 +250,13 @@ jobs:
         domain=$(echo "${{ github.event.inputs.target_url }}" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
         echo "Domain extracted: $domain"
         
+        export PATH=$PATH:$(go env GOPATH)/bin
+        
         # Subfinder
-        /home/runner/go/bin/subfinder -d $domain -silent > subfinder-results.txt 2>&1 || true
+        subfinder -d $domain -silent > subfinder-results.txt 2>&1 || true
         
         # Assetfinder  
-        /home/runner/go/bin/assetfinder $domain > assetfinder-results.txt 2>&1 || true
+        assetfinder $domain > assetfinder-results.txt 2>&1 || true
         
     - name: Run Nikto Scan
       run: |
@@ -313,32 +309,22 @@ jobs:
         # WPScan Results
         echo "### 🛡️ WPSCAN RESULTS" >> ULTIMATE-REPORT.md
         if [ -s wpscan-nuclear-results.txt ]; then
-          tail -100 wpscan-nuclear-results.txt >> ULTIMATE-REPORT.md
+          tail -50 wpscan-nuclear-results.txt >> ULTIMATE-REPORT.md
         else
           echo "Aucun résultat WPScan" >> ULTIMATE-REPORT.md
         fi
         echo "" >> ULTIMATE-REPORT.md
         
-        # CMSmap Results
-        echo "### 🗺️ CMSMAP RESULTS" >> ULTIMATE-REPORT.md
-        if [ -s cmsmap-results.txt ]; then
-          cat cmsmap-results.txt >> ULTIMATE-REPORT.md
-        else
-          echo "Aucun résultat CMSmap" >> ULTIMATE-REPORT.md
-        fi
-        echo "" >> ULTIMATE-REPORT.md
-        
         echo "## 🎯 RÉSUMÉ DES VULNÉRABILITÉS CRITIQUES" >> ULTIMATE-REPORT.md
-        grep -r "critical" nuclei-*.txt | head -20 >> ULTIMATE-REPORT.md 2>/dev/null || echo "Aucune vulnérabilité critique trouvée" >> ULTIMATE-REPORT.md
+        grep -r "critical" nuclei-*.txt 2>/dev/null | head -20 >> ULTIMATE-REPORT.md || echo "Aucune vulnérabilité critique trouvée" >> ULTIMATE-REPORT.md
         
     - name: Upload ULTIMATE Results
       uses: actions/upload-artifact@v4
       with:
-        name: nuclear-wp-recon-${{ github.run_id }}-${{ github.event.inputs.intensity }}
+        name: nuclear-wp-recon-${{ github.run_id }}
         path: |
           ULTIMATE-REPORT.md
           *.txt
-          *.json
         retention-days: 7
         
     - name: Nuclear Alert
@@ -348,5 +334,3 @@ jobs:
         echo "🎯 Cible: ${{ github.event.inputs.target_url }}"
         echo "💥 Intensité: ${{ github.event.inputs.intensity }}"
         echo "🔧 Type: ${{ github.event.inputs.scan_type }}"
-        echo "📊 $(grep -r "critical" nuclei-*.txt 2>/dev/null | wc -l) vulnérabilités critiques trouvées"
-        echo "🔍 $(grep -r "high" nuclei-*.txt 2>/dev/null | wc -l) vulnérabilités haute trouvées"
