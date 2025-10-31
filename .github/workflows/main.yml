@@ -1,4 +1,4 @@
-name: WordPress ULTIMATE Recon & Security Scan
+name: WordPress PRO Security Scan
 on:
   workflow_dispatch:
     inputs:
@@ -7,31 +7,20 @@ on:
         required: true
         type: string
         placeholder: 'https://example.com'
-      intensity:
-        description: '💥 Niveau d intensité'
-        required: true
-        default: 'aggressive'
-        type: choice
-        options:
-        - stealth
-        - aggressive  
-        - nuclear
-      scan_type:
-        description: '🔧 Type de scan'
+      scan_mode:
+        description: '⚡ Mode de scan'
         required: true
         default: 'full'
         type: choice
         options:
         - quick
         - full
-        - comprehensive
+        - aggressive
   schedule:
-    - cron: '0 3 * * *'  # Tous les jours à 3h
-  push:
-    branches: [ main ]
+    - cron: '0 2 * * *'  # Tous les jours à 2h
 
 jobs:
-  wordpress-ultimate-recon:
+  wordpress-pro-scan:
     runs-on: ubuntu-latest
     
     steps:
@@ -50,307 +39,147 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt update
-        sudo apt install -y build-essential \
-          libcurl4-openssl-dev git python3 python3-pip python3-venv \
-          golang-go npm nodejs unzip wget curl jq nmap whois \
-          dnsutils nikto libxml2-dev libxslt-dev
+        sudo apt install -y git python3 python3-pip golang-go ruby npm nmap nikto
         
-    # === SECTION NUCLEI - INSTALLATION MANUELLE ===
-    - name: Install Nuclei manually
+    # === NUCLEI ===
+    - name: Install Nuclei
       run: |
-        echo "🔧 Installing Nuclei manually..."
-        # Téléchargement et installation de Nuclei
         go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
-        
-    - name: Update Nuclei templates
-      run: |
-        echo "📦 Updating Nuclei templates..."
         export PATH=$PATH:$(go env GOPATH)/bin
         nuclei -update-templates
         
-    # === SECTION WPScan - INSTALLATION CORRIGÉE ===  
-    - name: Install WPScan with proper permissions
+    # === WPSCAN ===  
+    - name: Install WPScan
       run: |
-        echo "🛡️ Installing WPScan with user permissions..."
-        # Installation en mode user pour éviter les problèmes de permissions
-        gem install --user-install wpscan
+        gem install wpscan --user-install
         export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
         wpscan --update
         
-    # === SECTION CMSMAP ===
+    # === CMSMAP ===
     - name: Install CMSmap
       run: |
         git clone https://github.com/Dionach/CMSmap.git
         cd CMSmap && pip3 install . --user
         
-    # === SECTION WPSCAN PLUS ===
-    - name: Install wpscan-plus
-      run: |
-        git clone https://github.com/0x4544474154/wpscan-plus.git || echo "wpscan-plus clone failed, continuing..."
-        
-    # === SECTION WORDPRESS-SCAN ===
-    - name: Install wordpress-scan
-      run: |
-        git clone https://github.com/wpscanteam/wordpress-scan.git || echo "wordpress-scan clone failed, continuing..."
-        cd wordpress-scan
-        gem install --user-install bundler
-        export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
-        bundle install --path vendor/bundle || echo "wordpress-scan installation failed"
-        
-    # === SECTION WPFINGER ===
-    - name: Install wpfinger
-      run: |
-        git clone https://github.com/mazen160/wpfinger.git || echo "wpfinger clone failed, continuing..."
-        cd wpfinger && pip3 install -r requirements.txt --user || echo "wpfinger installation failed"
-        
-    # === SECTION WPCONTEXT ===
-    - name: Install wpcontext
-      run: |
-        pip3 install wpcontext --user || echo "wpcontext installation failed"
-        
-    # === SECTION WPLOOKUP ===
-    - name: Install wplookup
-      run: |
-        npm install -g wplookup || echo "wplookup installation failed"
-        
-    # === SECTION WORDPRESS-PENTESTING-FRAMEWORK ===
-    - name: Install WPF
-      run: |
-        git clone https://github.com/rastating/wordpress-pentesting-framework.git || echo "WPF clone failed, continuing..."
-        cd wordpress-pentesting-framework
-        gem install --user-install bundler
-        export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
-        bundle install --path vendor/bundle || echo "WPF installation failed"
-        
-    # === SECTION WPSQLI ===
-    - name: Install wpsqli
-      run: |
-        git clone https://github.com/0x4544474154/wpsqli.git || echo "wpsqli clone failed, continuing..."
-        
-    # === SECTION WPXF ===
-    - name: Install wpxf
-      run: |
-        git clone https://github.com/rastating/wpxf.git || echo "wpxf clone failed, continuing..."
-        cd wpxf
-        gem install --user-install bundler
-        export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
-        bundle install --path vendor/bundle || echo "wpxf installation failed"
-        
-    # === SECTION SUBDOMAIN RECON ===
+    # === SUBDOMAIN TOOLS ===
     - name: Install subdomain tools
       run: |
-        # Subfinder
         go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
-        
-        # Assetfinder
-        go install github.com/tomnomnom/assetfinder@latest
+        go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
         
     # === CONFIGURATION DU PATH ===
     - name: Setup environment paths
       run: |
-        echo "🔧 Setting up environment paths..."
         echo "PATH=$HOME/.local/bin:$(go env GOPATH)/bin:$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH" >> $GITHUB_ENV
-        echo "GEM_HOME=$HOME/.local/share/gem/ruby/3.2.0" >> $GITHUB_ENV
-        echo "GEM_PATH=$HOME/.local/share/gem/ruby/3.2.0" >> $GITHUB_ENV
-        
-    # === VERIFICATION DES OUTILS ===
-    - name: Verify tools installation
-      run: |
-        echo "🔍 Verifying installed tools..."
-        nuclei -version && echo "✅ Nuclei installed"
-        wpscan --version && echo "✅ WPScan installed"
-        python3 --version && echo "✅ Python installed"
-        go version && echo "✅ Go installed"
         
     # === LANCEMENT DES SCANS ===
     
-    - name: Run Ultimate Nuclei Scan
+    - name: Run Nuclei WordPress Scan
       run: |
-        echo "🎯 Starting ULTIMATE Nuclei Scan on: ${{ github.event.inputs.target_url }}"
+        echo "🔍 Starting Nuclei WordPress Scan..."
         nuclei -u "${{ github.event.inputs.target_url }}" \
         -t http/technologies/wordpress/ \
         -t http/vulnerabilities/wordpress/ \
         -t http/misconfiguration/wordpress/ \
-        -t http/exposed-panels/wordpress/ \
-        -t http/technologies/wordpress-themes/ \
-        -t http/technologies/wordpress-plugins/ \
-        -t http/files/wordpress/ \
         -t http/vulnerabilities/wordpress-plugins/ \
         -t http/vulnerabilities/wordpress-themes/ \
-        -t http/vulnerabilities/wordpress/login-bypass.yaml \
-        -t http/exposures/configs/ \
-        -t http/exposures/backups/ \
-        -t http/exposures/logs/ \
-        -t http/exposed-panels/ \
-        -severity low,medium,high,critical \
+        -severity medium,high,critical \
         -rate-limit 100 \
-        -concurrency 30 \
-        -timeout 10 \
-        -retries 3 \
-        -headless \
-        -system-resolvers \
         -silent \
-        -o nuclei-ultimate-results.txt
+        -o nuclei-results.txt
       continue-on-error: true
     
-    - name: Run Nuclear WPScan
+    - name: Run WPScan
       run: |
-        echo "🔥 Starting NUCLEAR WPScan on: ${{ github.event.inputs.target_url }}"
+        echo "🛡️ Starting WPScan..."
         wpscan --url "${{ github.event.inputs.target_url }}" \
-        --enumerate vp,vt,tt,cb,dbe,u,m \
+        --enumerate vp,vt,tt,u,m \
         --plugins-detection mixed \
-        --plugins-version-detection mixed \
-        --themes-detection mixed \
-        --themes-version-detection mixed \
         --max-threads 10 \
-        -t 5 \
-        --request-timeout 30 \
-        --detection-mode mixed \
+        -t 3 \
         --random-user-agent \
-        --ignore-main-redirect \
-        --disable-tls-checks \
         --format cli-no-colour \
-        --output wpscan-nuclear-results.txt
+        --output wpscan-results.txt
       env:
         WPSCAN_API_TOKEN: ${{ secrets.WPSCAN_API_TOKEN }}
       continue-on-error: true
     
     - name: Run CMSmap Scan
       run: |
-        echo "🗺️ Starting CMSmap on: ${{ github.event.inputs.target_url }}"
+        echo "🗺️ Starting CMSmap..."
         cd CMSmap && python3 cmsmap.py -t "${{ github.event.inputs.target_url }}" -f W --no-output --quiet
         cp output/*.txt ../cmsmap-results.txt 2>/dev/null || echo "No CMSmap output"
         
-    - name: Run wpscan-plus
-      run: |
-        echo "➕ Starting wpscan-plus on: ${{ github.event.inputs.target_url }}"
-        if [ -d "wpscan-plus" ]; then
-          cd wpscan-plus && ruby wpscan-plus.rb -u "${{ github.event.inputs.target_url }}" > ../wpscan-plus-results.txt 2>&1 || true
-        else
-          echo "wpscan-plus not available" > wpscan-plus-results.txt
-        fi
-        
-    - name: Run wordpress-scan
-      run: |
-        echo "🔍 Starting wordpress-scan on: ${{ github.event.inputs.target_url }}"
-        if [ -d "wordpress-scan" ]; then
-          cd wordpress-scan && bundle exec ruby wordpress-scan.rb --url "${{ github.event.inputs.target_url }}" --no-color > ../wordpress-scan-results.txt 2>&1 || true
-        else
-          echo "wordpress-scan not available" > wordpress-scan-results.txt
-        fi
-        
-    - name: Run wpfinger
-      run: |
-        echo "👆 Starting wpfinger on: ${{ github.event.inputs.target_url }}"
-        if [ -d "wpfinger" ]; then
-          cd wpfinger && python3 wpfinger.py -t "${{ github.event.inputs.target_url }}" > ../wpfinger-results.txt 2>&1 || true
-        else
-          echo "wpfinger not available" > wpfinger-results.txt
-        fi
-        
-    - name: Run wpcontext
-      run: |
-        echo "🎭 Starting wpcontext on: ${{ github.event.inputs.target_url }}"
-        wpcontext --url "${{ github.event.inputs.target_url }}" --output wpcontext-results.txt || echo "wpcontext failed" > wpcontext-results.txt
-        
-    - name: Run wplookup
-      run: |
-        echo "👀 Starting wplookup on: ${{ github.event.inputs.target_url }}"
-        wplookup "${{ github.event.inputs.target_url }}" > wplookup-results.txt 2>&1 || echo "wplookup failed" > wplookup-results.txt
-        
-    - name: Run wpsqli scan
-      run: |
-        echo "💉 Testing wpsqli on: ${{ github.event.inputs.target_url }}"
-        if [ -d "wpsqli" ]; then
-          cd wpsqli && python3 wpsqli.py -u "${{ github.event.inputs.target_url }}" --check > ../wpsqli-results.txt 2>&1 || true
-        else
-          echo "wpsqli not available" > wpsqli-results.txt
-        fi
-        
     - name: Run Subdomain Discovery
       run: |
-        echo "🌐 Starting Subdomain Discovery for: ${{ github.event.inputs.target_url }}"
+        echo "🌐 Starting Subdomain Discovery..."
         domain=$(echo "${{ github.event.inputs.target_url }}" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
-        echo "Domain extracted: $domain"
         
-        # Subfinder
-        subfinder -d $domain -silent > subfinder-results.txt 2>&1 || true
-        
-        # Assetfinder  
-        assetfinder $domain > assetfinder-results.txt 2>&1 || true
+        subfinder -d $domain -silent > subdomains.txt
+        if [ -s subdomains.txt ]; then
+          httpx -l subdomains.txt -silent > live-subdomains.txt
+        fi
         
     - name: Run Nikto Scan
       run: |
-        echo "🚨 Starting Nikto on: ${{ github.event.inputs.target_url }}"
+        echo "🚨 Starting Nikto..."
         domain=$(echo "${{ github.event.inputs.target_url }}" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
         nikto -h $domain -o nikto-results.txt || true
         
-    - name: Run Nmap WordPress Scripts
+    - name: Run Nmap Scan
       run: |
-        echo "📡 Starting Nmap WordPress scripts on: ${{ github.event.inputs.target_url }}"
+        echo "📡 Starting Nmap..."
         domain=$(echo "${{ github.event.inputs.target_url }}" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
-        nmap -p 80,443 --script http-wordpress-enum,http-wordpress-brute,http-wordpress-users $domain > nmap-wp-results.txt 2>&1 || true
+        nmap -p 80,443,8080 --script http-wordpress-enum,http-wordpress-users $domain > nmap-results.txt 2>&1 || true
         
-    - name: Generate ULTIMATE Report
+    - name: Generate Security Report
       run: |
-        echo "# 🚀 RAPPORT ULTIME DE RECON WORDPRESS" > ULTIMATE-REPORT.md
-        echo "## Scan réalisé le $(date)" >> ULTIMATE-REPORT.md
-        echo "### 🎯 Cible: ${{ github.event.inputs.target_url }}" >> ULTIMATE-REPORT.md
-        echo "### 💥 Intensité: ${{ github.event.inputs.intensity }}" >> ULTIMATE-REPORT.md
-        echo "### 🔧 Type: ${{ github.event.inputs.scan_type }}" >> ULTIMATE-REPORT.md
-        echo "" >> ULTIMATE-REPORT.md
+        echo "# 🔒 RAPPORT DE SÉCURITÉ WORDPRESS" > SECURITY-REPORT.md
+        echo "## Scan réalisé le $(date)" >> SECURITY-REPORT.md
+        echo "### Cible: ${{ github.event.inputs.target_url }}" >> SECURITY-REPORT.md
+        echo "### Mode: ${{ github.event.inputs.scan_mode }}" >> SECURITY-REPORT.md
+        echo "" >> SECURITY-REPORT.md
         
-        echo "## 📊 OUTILS UTILISÉS" >> ULTIMATE-REPORT.md
-        echo "- 🔍 **Nuclei** - Scanning de vulnérabilités" >> ULTIMATE-REPORT.md
-        echo "- 🛡️ **WPScan** - Scanner WordPress principal" >> ULTIMATE-REPORT.md
-        echo "- 🗺️ **CMSmap** - Mapping CMS" >> ULTIMATE-REPORT.md
-        echo "- ➕ **wpscan-plus** - WPScan amélioré" >> ULTIMATE-REPORT.md
-        echo "- 🔍 **wordpress-scan** - Scanner alternatif" >> ULTIMATE-REPORT.md
-        echo "- 👆 **wpfinger** - Fingerprinting WordPress" >> ULTIMATE-REPORT.md
-        echo "- 🎭 **wpcontext** - Analyse de contexte" >> ULTIMATE-REPORT.md
-        echo "- 👀 **wplookup** - Recherche d'infos" >> ULTIMATE-REPORT.md
-        echo "- 💉 **wpsqli** - Tests SQLi" >> ULTIMATE-REPORT.md
-        echo "- 🌐 **Subdomain Tools** - Discovery" >> ULTIMATE-REPORT.md
-        echo "- 🚨 **Nikto** - Scanner web" >> ULTIMATE-REPORT.md
-        echo "- 📡 **Nmap** - Scanning réseau" >> ULTIMATE-REPORT.md
-        echo "" >> ULTIMATE-REPORT.md
-        
-        echo "## 📈 RÉSULTATS PAR OUTIL" >> ULTIMATE-REPORT.md
+        echo "## 📊 RÉSULTATS" >> SECURITY-REPORT.md
         
         # Nuclei Results
-        echo "### 🔍 NUCLEI RESULTS" >> ULTIMATE-REPORT.md
-        if [ -s nuclei-ultimate-results.txt ]; then
-          cat nuclei-ultimate-results.txt >> ULTIMATE-REPORT.md
+        echo "### 🔍 NUCLEI" >> SECURITY-REPORT.md
+        if [ -s nuclei-results.txt ]; then
+          cat nuclei-results.txt >> SECURITY-REPORT.md
         else
-          echo "Aucun résultat Nuclei" >> ULTIMATE-REPORT.md
+          echo "Aucune vulnérabilité trouvée" >> SECURITY-REPORT.md
         fi
-        echo "" >> ULTIMATE-REPORT.md
+        echo "" >> SECURITY-REPORT.md
         
         # WPScan Results
-        echo "### 🛡️ WPSCAN RESULTS" >> ULTIMATE-REPORT.md
-        if [ -s wpscan-nuclear-results.txt ]; then
-          tail -50 wpscan-nuclear-results.txt >> ULTIMATE-REPORT.md
+        echo "### 🛡️ WPSCAN" >> SECURITY-REPORT.md
+        if [ -s wpscan-results.txt ]; then
+          grep -E "(vulnerability|Vulnerability|issue|Issue)" wpscan-results.txt >> SECURITY-REPORT.md || echo "Aucune vulnérabilité identifiée" >> SECURITY-REPORT.md
         else
-          echo "Aucun résultat WPScan" >> ULTIMATE-REPORT.md
+          echo "Scan complété" >> SECURITY-REPORT.md
         fi
-        echo "" >> ULTIMATE-REPORT.md
+        echo "" >> SECURITY-REPORT.md
         
-        echo "## 🎯 RÉSUMÉ DES VULNÉRABILITÉS CRITIQUES" >> ULTIMATE-REPORT.md
-        grep -r "critical" nuclei-*.txt 2>/dev/null | head -20 >> ULTIMATE-REPORT.md || echo "Aucune vulnérabilité critique trouvée" >> ULTIMATE-REPORT.md
+        # Sous-domaines
+        echo "### 🌐 SOUS-DOMAINES" >> SECURITY-REPORT.md
+        if [ -s live-subdomains.txt ]; then
+          cat live-subdomains.txt >> SECURITY-REPORT.md
+        else
+          echo "Aucun sous-domaine trouvé" >> SECURITY-REPORT.md
+        fi
         
-    - name: Upload ULTIMATE Results
+    - name: Upload Results
       uses: actions/upload-artifact@v4
       with:
-        name: nuclear-wp-recon-${{ github.run_id }}
+        name: wp-scan-results-${{ github.run_id }}
         path: |
-          ULTIMATE-REPORT.md
+          SECURITY-REPORT.md
           *.txt
         retention-days: 7
         
-    - name: Nuclear Alert
+    - name: Scan Complete
       if: always()
       run: |
-        echo "🚀 SCAN ULTIME TERMINÉ !"
+        echo "✅ SCAN TERMINÉ !"
         echo "🎯 Cible: ${{ github.event.inputs.target_url }}"
-        echo "💥 Intensité: ${{ github.event.inputs.intensity }}"
-        echo "🔧 Type: ${{ github.event.inputs.scan_type }}"
+        echo "📊 Rapport généré dans les artifacts"
