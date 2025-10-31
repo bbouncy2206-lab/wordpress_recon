@@ -1,0 +1,341 @@
+name: WordPress ULTIMATE Recon & Security Scan
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: '🎯 URL du site WordPress à scanner'
+        required: true
+        type: string
+        placeholder: 'https://example.com'
+      intensity:
+        description: '💥 Niveau d intensité'
+        required: true
+        default: 'aggressive'
+        type: choice
+        options:
+        - stealth
+        - aggressive  
+        - nuclear
+      scan_type:
+        description: '🔧 Type de scan'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+        - quick
+        - full
+        - comprehensive
+  schedule:
+    - cron: '0 3 * * *'  # Tous les jours à 3h
+  push:
+    branches: [ main ]
+
+jobs:
+  wordpress-ultimate-recon:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Validate target URL
+      run: |
+        echo "🎯 Target URL: ${{ github.event.inputs.target_url }}"
+        if [[ ! ${{ github.event.inputs.target_url }} =~ ^https?:// ]]; then
+          echo "❌ ERROR: URL must start with http:// or https://"
+          exit 1
+        fi
+        echo "✅ URL validation passed"
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y ruby ruby-dev build-essential \
+          libcurl4-openssl-dev git python3 python3-pip python3-venv \
+          golang-go npm nodejs unzip wget curl jq nmap whois \
+          subversion git-svn dnsutils nikto
+        
+    # === SECTION NUCLEI ===
+    - name: Setup Nuclei
+      uses: projectdiscovery/setup-nuclei-action@v1
+      with:
+        nuclei-version: latest
+        
+    - name: Update Nuclei templates
+      run: nuclei -update-templates
+        
+    # === SECTION WPScan ===  
+    - name: Install WPScan
+      run: |
+        gem install wpscan
+        wpscan --update
+        
+    # === SECTION CMSMAP ===
+    - name: Install CMSmap
+      run: |
+        git clone https://github.com/Dionach/CMSmap.git
+        cd CMSmap && pip3 install .
+        
+    # === SECTION WPSeku ===
+    - name: Install WPSeku
+      run: |
+        git clone https://github.com/m4ll0k/WPSeku.git wpseku
+        cd wpseku && pip3 install -r requirements.txt
+        
+    # === SECTION WPSCAN PLUS ===
+    - name: Install wpscan-plus
+      run: |
+        git clone https://github.com/0x4544474154/wpscan-plus.git
+        
+    # === SECTION WORDPRESS-SCAN ===
+    - name: Install wordpress-scan
+      run: |
+        git clone https://github.com/wpscanteam/wordpress-scan.git
+        cd wordpress-scan && bundle install
+        
+    # === SECTION WPFINGER ===
+    - name: Install wpfinger
+      run: |
+        git clone https://github.com/mazen160/wpfinger.git
+        cd wpfinger && pip3 install -r requirements.txt
+        
+    # === SECTION WPCONTEXT ===
+    - name: Install wpcontext
+      run: |
+        pip3 install wpcontext
+        
+    # === SECTION WPLOOKUP ===
+    - name: Install wplookup
+      run: |
+        npm install -g wplookup
+        
+    # === SECTION WORDPRESS-PENTESTING-FRAMEWORK ===
+    - name: Install WPF
+      run: |
+        git clone https://github.com/rastating/wordpress-pentesting-framework.git
+        cd wordpress-pentesting-framework && bundle install
+        
+    # === SECTION WPSQLI ===
+    - name: Install wpsqli
+      run: |
+        git clone https://github.com/0x4544474154/wpsqli.git
+        
+    # === SECTION WPXF ===
+    - name: Install wpxf
+      run: |
+        git clone https://github.com/rastating/wpxf.git
+        cd wpxf && bundle install
+        
+    # === SECTION SUBDOMAIN RECON ===
+    - name: Install subdomain tools
+      run: |
+        # Subfinder
+        go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+        
+        # Assetfinder
+        go install github.com/tomnomnom/assetfinder@latest
+        
+        # Amass
+        go install -v github.com/OWASP/Amass/v3/...@master
+        
+    # === LANCEMENT DES SCANS ===
+    
+    - name: Run Ultimate Nuclei Scan
+      run: |
+        echo "🎯 Starting ULTIMATE Nuclei Scan on: ${{ github.event.inputs.target_url }}"
+        nuclei -u "${{ github.event.inputs.target_url }}" \
+        -t http/technologies/wordpress/ \
+        -t http/vulnerabilities/wordpress/ \
+        -t http/misconfiguration/wordpress/ \
+        -t http/exposed-panels/wordpress/ \
+        -t http/technologies/wordpress-themes/ \
+        -t http/technologies/wordpress-plugins/ \
+        -t http/files/wordpress/ \
+        -t http/vulnerabilities/wordpress-plugins/ \
+        -t http/vulnerabilities/wordpress-themes/ \
+        -t http/vulnerabilities/wordpress/login-bypass.yaml \
+        -t http/exposures/configs/ \
+        -t http/exposures/backups/ \
+        -t http/exposures/logs/ \
+        -t http/exposed-panels/ \
+        -severity low,medium,high,critical \
+        -rate-limit 200 \
+        -concurrency 70 \
+        -timeout 15 \
+        -retries 5 \
+        -headless \
+        -system-resolvers \
+        -silent \
+        -o nuclei-ultimate-results.txt
+      continue-on-error: true
+    
+    - name: Run Nuclear WPScan
+      run: |
+        echo "🔥 Starting NUCLEAR WPScan on: ${{ github.event.inputs.target_url }}"
+        wpscan --url "${{ github.event.inputs.target_url }}" \
+        --enumerate vp,vt,tt,cb,dbe,u,m,p,t \
+        --enumerate u0-100 \
+        --plugins-detection aggressive \
+        --plugins-version-detection aggressive \
+        --themes-detection aggressive \
+        --themes-version-detection aggressive \
+        --max-threads 30 \
+        --throttle 5 \
+        --request-timeout 45 \
+        --detection-mode aggressive \
+        --random-user-agent \
+        --ignore-main-redirect \
+        --disable-tls-checks \
+        --format cli-no-colour \
+        --output wpscan-nuclear-results.txt
+      env:
+        WPSCAN_API_TOKEN: ${{ secrets.WPSCAN_API_TOKEN }}
+      continue-on-error: true
+    
+    - name: Run CMSmap Scan
+      run: |
+        echo "🗺️ Starting CMSmap on: ${{ github.event.inputs.target_url }}"
+        cd CMSmap && python3 cmsmap.py -t "${{ github.event.inputs.target_url }}" -f W --no-output --quiet
+        cp output/*.txt ../cmsmap-results.txt 2>/dev/null || echo "No CMSmap output"
+        
+    - name: Run WPSeku Scan
+      run: |
+        echo "⚡ Starting WPSeku on: ${{ github.event.inputs.target_url }}"
+        cd wpseku && python3 wpseku.py -u "${{ github.event.inputs.target_url }}" --verbose > ../wpseku-results.txt 2>&1 || true
+        
+    - name: Run wpscan-plus
+      run: |
+        echo "➕ Starting wpscan-plus on: ${{ github.event.inputs.target_url }}"
+        cd wpscan-plus && ruby wpscan-plus.rb -u "${{ github.event.inputs.target_url }}" > ../wpscan-plus-results.txt 2>&1 || true
+        
+    - name: Run wordpress-scan
+      run: |
+        echo "🔍 Starting wordpress-scan on: ${{ github.event.inputs.target_url }}"
+        cd wordpress-scan && ruby wordpress-scan.rb --url "${{ github.event.inputs.target_url }}" --no-color > ../wordpress-scan-results.txt 2>&1 || true
+        
+    - name: Run wpfinger
+      run: |
+        echo "👆 Starting wpfinger on: ${{ github.event.inputs.target_url }}"
+        cd wpfinger && python3 wpfinger.py -t "${{ github.event.inputs.target_url }}" > ../wpfinger-results.txt 2>&1 || true
+        
+    - name: Run wpcontext
+      run: |
+        echo "🎭 Starting wpcontext on: ${{ github.event.inputs.target_url }}"
+        wpcontext --url "${{ github.event.inputs.target_url }}" --output wpcontext-results.txt || true
+        
+    - name: Run wplookup
+      run: |
+        echo "👀 Starting wplookup on: ${{ github.event.inputs.target_url }}"
+        wplookup "${{ github.event.inputs.target_url }}" > wplookup-results.txt 2>&1 || true
+        
+    - name: Run WordPress Pentesting Framework
+      run: |
+        echo "🛠️ Starting WPF on: ${{ github.event.inputs.target_url }}"
+        cd wordpress-pentesting-framework && echo "exit" | bundle exec ruby wpf-console.rb || true
+        
+    - name: Run wpsqli scan
+      run: |
+        echo "💉 Testing wpsqli on: ${{ github.event.inputs.target_url }}"
+        cd wpsqli && python3 wpsqli.py -u "${{ github.event.inputs.target_url }}" --check > ../wpsqli-results.txt 2>&1 || true
+        
+    - name: Run Subdomain Discovery
+      run: |
+        echo "🌐 Starting Subdomain Discovery for: ${{ github.event.inputs.target_url }}"
+        domain=$(echo "${{ github.event.inputs.target_url }}" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
+        echo "Domain extracted: $domain"
+        
+        # Subfinder
+        /home/runner/go/bin/subfinder -d $domain -silent > subfinder-results.txt 2>&1 || true
+        
+        # Assetfinder  
+        /home/runner/go/bin/assetfinder $domain > assetfinder-results.txt 2>&1 || true
+        
+    - name: Run Nikto Scan
+      run: |
+        echo "🚨 Starting Nikto on: ${{ github.event.inputs.target_url }}"
+        domain=$(echo "${{ github.event.inputs.target_url }}" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
+        nikto -h $domain -o nikto-results.txt || true
+        
+    - name: Run Nmap WordPress Scripts
+      run: |
+        echo "📡 Starting Nmap WordPress scripts on: ${{ github.event.inputs.target_url }}"
+        domain=$(echo "${{ github.event.inputs.target_url }}" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
+        nmap -p 80,443 --script http-wordpress-enum,http-wordpress-brute,http-wordpress-users $domain > nmap-wp-results.txt 2>&1 || true
+        
+    - name: Generate ULTIMATE Report
+      run: |
+        echo "# 🚀 RAPPORT ULTIME DE RECON WORDPRESS" > ULTIMATE-REPORT.md
+        echo "## Scan réalisé le $(date)" >> ULTIMATE-REPORT.md
+        echo "### 🎯 Cible: ${{ github.event.inputs.target_url }}" >> ULTIMATE-REPORT.md
+        echo "### 💥 Intensité: ${{ github.event.inputs.intensity }}" >> ULTIMATE-REPORT.md
+        echo "### 🔧 Type: ${{ github.event.inputs.scan_type }}" >> ULTIMATE-REPORT.md
+        echo "" >> ULTIMATE-REPORT.md
+        
+        echo "## 📊 OUTILS UTILISÉS" >> ULTIMATE-REPORT.md
+        echo "- 🔍 **Nuclei** - Scanning de vulnérabilités" >> ULTIMATE-REPORT.md
+        echo "- 🛡️ **WPScan** - Scanner WordPress principal" >> ULTIMATE-REPORT.md
+        echo "- 🗺️ **CMSmap** - Mapping CMS" >> ULTIMATE-REPORT.md
+        echo "- ⚡ **WPSeku** - Sécurité WordPress" >> ULTIMATE-REPORT.md
+        echo "- ➕ **wpscan-plus** - WPScan amélioré" >> ULTIMATE-REPORT.md
+        echo "- 🔍 **wordpress-scan** - Scanner alternatif" >> ULTIMATE-REPORT.md
+        echo "- 👆 **wpfinger** - Fingerprinting WordPress" >> ULTIMATE-REPORT.md
+        echo "- 🎭 **wpcontext** - Analyse de contexte" >> ULTIMATE-REPORT.md
+        echo "- 👀 **wplookup** - Recherche d'infos" >> ULTIMATE-REPORT.md
+        echo "- 🛠️ **WPF** - Framework de pentest" >> ULTIMATE-REPORT.md
+        echo "- 💉 **wpsqli** - Tests SQLi" >> ULTIMATE-REPORT.md
+        echo "- 🌐 **Subdomain Tools** - Discovery" >> ULTIMATE-REPORT.md
+        echo "- 🚨 **Nikto** - Scanner web" >> ULTIMATE-REPORT.md
+        echo "- 📡 **Nmap** - Scanning réseau" >> ULTIMATE-REPORT.md
+        echo "" >> ULTIMATE-REPORT.md
+        
+        echo "## 📈 RÉSULTATS PAR OUTIL" >> ULTIMATE-REPORT.md
+        
+        # Nuclei Results
+        echo "### 🔍 NUCLEI RESULTS" >> ULTIMATE-REPORT.md
+        if [ -s nuclei-ultimate-results.txt ]; then
+          cat nuclei-ultimate-results.txt >> ULTIMATE-REPORT.md
+        else
+          echo "Aucun résultat Nuclei" >> ULTIMATE-REPORT.md
+        fi
+        echo "" >> ULTIMATE-REPORT.md
+        
+        # WPScan Results
+        echo "### 🛡️ WPSCAN RESULTS" >> ULTIMATE-REPORT.md
+        if [ -s wpscan-nuclear-results.txt ]; then
+          tail -100 wpscan-nuclear-results.txt >> ULTIMATE-REPORT.md
+        else
+          echo "Aucun résultat WPScan" >> ULTIMATE-REPORT.md
+        fi
+        echo "" >> ULTIMATE-REPORT.md
+        
+        # CMSmap Results
+        echo "### 🗺️ CMSMAP RESULTS" >> ULTIMATE-REPORT.md
+        if [ -s cmsmap-results.txt ]; then
+          cat cmsmap-results.txt >> ULTIMATE-REPORT.md
+        else
+          echo "Aucun résultat CMSmap" >> ULTIMATE-REPORT.md
+        fi
+        echo "" >> ULTIMATE-REPORT.md
+        
+        echo "## 🎯 RÉSUMÉ DES VULNÉRABILITÉS CRITIQUES" >> ULTIMATE-REPORT.md
+        grep -r "critical" nuclei-*.txt | head -20 >> ULTIMATE-REPORT.md 2>/dev/null || echo "Aucune vulnérabilité critique trouvée" >> ULTIMATE-REPORT.md
+        
+    - name: Upload ULTIMATE Results
+      uses: actions/upload-artifact@v4
+      with:
+        name: nuclear-wp-recon-${{ github.run_id }}-${{ github.event.inputs.intensity }}
+        path: |
+          ULTIMATE-REPORT.md
+          *.txt
+          *.json
+        retention-days: 7
+        
+    - name: Nuclear Alert
+      if: always()
+      run: |
+        echo "🚀 SCAN ULTIME TERMINÉ !"
+        echo "🎯 Cible: ${{ github.event.inputs.target_url }}"
+        echo "💥 Intensité: ${{ github.event.inputs.intensity }}"
+        echo "🔧 Type: ${{ github.event.inputs.scan_type }}"
+        echo "📊 $(grep -r "critical" nuclei-*.txt 2>/dev/null | wc -l) vulnérabilités critiques trouvées"
+        echo "🔍 $(grep -r "high" nuclei-*.txt 2>/dev/null | wc -l) vulnérabilités haute trouvées"
