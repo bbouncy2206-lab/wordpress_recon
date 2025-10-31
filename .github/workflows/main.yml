@@ -50,7 +50,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt update
-        sudo apt install -y ruby ruby-dev build-essential \
+        sudo apt install -y build-essential \
           libcurl4-openssl-dev git python3 python3-pip python3-venv \
           golang-go npm nodejs unzip wget curl jq nmap whois \
           dnsutils nikto libxml2-dev libxslt-dev
@@ -68,23 +68,26 @@ jobs:
         export PATH=$PATH:$(go env GOPATH)/bin
         nuclei -update-templates
         
-    # === SECTION WPScan ===  
-    - name: Install WPScan
+    # === SECTION WPScan - INSTALLATION CORRIGÉE ===  
+    - name: Install WPScan with proper permissions
       run: |
-        gem install wpscan
+        echo "🛡️ Installing WPScan with user permissions..."
+        # Installation en mode user pour éviter les problèmes de permissions
+        gem install --user-install wpscan
+        export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
         wpscan --update
         
     # === SECTION CMSMAP ===
     - name: Install CMSmap
       run: |
         git clone https://github.com/Dionach/CMSmap.git
-        cd CMSmap && pip3 install .
+        cd CMSmap && pip3 install . --user
         
     # === SECTION WPSeku ===
     - name: Install WPSeku
       run: |
         git clone https://github.com/m4ll0k/WPSeku.git wpseku
-        cd wpseku && pip3 install -r requirements.txt
+        cd wpseku && pip3 install -r requirements.txt --user
         
     # === SECTION WPSCAN PLUS ===
     - name: Install wpscan-plus
@@ -95,18 +98,21 @@ jobs:
     - name: Install wordpress-scan
       run: |
         git clone https://github.com/wpscanteam/wordpress-scan.git
-        cd wordpress-scan && bundle install
+        cd wordpress-scan
+        gem install --user-install bundler
+        export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
+        bundle install --path vendor/bundle
         
     # === SECTION WPFINGER ===
     - name: Install wpfinger
       run: |
         git clone https://github.com/mazen160/wpfinger.git
-        cd wpfinger && pip3 install -r requirements.txt
+        cd wpfinger && pip3 install -r requirements.txt --user
         
     # === SECTION WPCONTEXT ===
     - name: Install wpcontext
       run: |
-        pip3 install wpcontext
+        pip3 install wpcontext --user
         
     # === SECTION WPLOOKUP ===
     - name: Install wplookup
@@ -117,7 +123,10 @@ jobs:
     - name: Install WPF
       run: |
         git clone https://github.com/rastating/wordpress-pentesting-framework.git
-        cd wordpress-pentesting-framework && bundle install
+        cd wordpress-pentesting-framework
+        gem install --user-install bundler
+        export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
+        bundle install --path vendor/bundle
         
     # === SECTION WPSQLI ===
     - name: Install wpsqli
@@ -128,7 +137,10 @@ jobs:
     - name: Install wpxf
       run: |
         git clone https://github.com/rastating/wpxf.git
-        cd wpxf && bundle install
+        cd wpxf
+        gem install --user-install bundler
+        export PATH="$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH"
+        bundle install --path vendor/bundle
         
     # === SECTION SUBDOMAIN RECON ===
     - name: Install subdomain tools
@@ -139,11 +151,18 @@ jobs:
         # Assetfinder
         go install github.com/tomnomnom/assetfinder@latest
         
+    # === CONFIGURATION DU PATH ===
+    - name: Setup environment paths
+      run: |
+        echo "🔧 Setting up environment paths..."
+        echo "PATH=$HOME/.local/bin:$(go env GOPATH)/bin:$HOME/.local/share/gem/ruby/3.2.0/bin:$PATH" >> $GITHUB_ENV
+        echo "GEM_HOME=$HOME/.local/share/gem/ruby/3.2.0" >> $GITHUB_ENV
+        echo "GEM_PATH=$HOME/.local/share/gem/ruby/3.2.0" >> $GITHUB_ENV
+        
     # === VERIFICATION DES OUTILS ===
     - name: Verify tools installation
       run: |
         echo "🔍 Verifying installed tools..."
-        export PATH=$PATH:$(go env GOPATH)/bin
         nuclei -version && echo "✅ Nuclei installed"
         wpscan --version && echo "✅ WPScan installed"
         python3 --version && echo "✅ Python installed"
@@ -154,7 +173,6 @@ jobs:
     - name: Run Ultimate Nuclei Scan
       run: |
         echo "🎯 Starting ULTIMATE Nuclei Scan on: ${{ github.event.inputs.target_url }}"
-        export PATH=$PATH:$(go env GOPATH)/bin
         nuclei -u "${{ github.event.inputs.target_url }}" \
         -t http/technologies/wordpress/ \
         -t http/vulnerabilities/wordpress/ \
@@ -222,7 +240,7 @@ jobs:
     - name: Run wordpress-scan
       run: |
         echo "🔍 Starting wordpress-scan on: ${{ github.event.inputs.target_url }}"
-        cd wordpress-scan && ruby wordpress-scan.rb --url "${{ github.event.inputs.target_url }}" --no-color > ../wordpress-scan-results.txt 2>&1 || true
+        cd wordpress-scan && bundle exec ruby wordpress-scan.rb --url "${{ github.event.inputs.target_url }}" --no-color > ../wordpress-scan-results.txt 2>&1 || true
         
     - name: Run wpfinger
       run: |
@@ -249,8 +267,6 @@ jobs:
         echo "🌐 Starting Subdomain Discovery for: ${{ github.event.inputs.target_url }}"
         domain=$(echo "${{ github.event.inputs.target_url }}" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
         echo "Domain extracted: $domain"
-        
-        export PATH=$PATH:$(go env GOPATH)/bin
         
         # Subfinder
         subfinder -d $domain -silent > subfinder-results.txt 2>&1 || true
